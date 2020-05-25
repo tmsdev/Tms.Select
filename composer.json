@@ -1,0 +1,15 @@
+{
+  "name": "tms/select",
+  "type": "neos-tms",
+  "description": "Select nodes instead of searching via reference editor in Neos CMS",
+  "keywords": ["neoscms", "selectbox", "selectboxeditor", "nodedata", "datasource"],
+  "license": "MIT",
+  "require": {
+    "neos/neos": "^4.3 || ^5.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tms\\Select\\": "Classes"
+    }
+  }
+}
