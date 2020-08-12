@@ -21,7 +21,7 @@ class NodeDataDataSource extends AbstractDataSource {
      */
     public function getData(NodeInterface $node = NULL, array $arguments)
     {
-        $rootNode = $node->getContext()->getRootNode();
+        $rootNode = $node->getContext()->getCurrentSiteNode();
         $q = new FlowQuery(array($rootNode));
         $nodes = array();
 
