@@ -21,8 +21,11 @@ composer require tms/select
           editorOptions:
             dataSourceIdentifier: 'tms-select-nodedata'
             dataSourceAdditionalData:
-              nodeType: 'Your.Package:TypeThatShouldBeReferenced'
+              nodeTypes: ['Your.Package:TypeThatShouldBeReferenced']
+              # Optional parameters
               groupBy: 'Your.Package:GroupType'
+              startingPoint: '/start/here/instead/of/rootnode'
+              labelPropertyName: 'title'
 ```
 
 ## Acknowledgments
