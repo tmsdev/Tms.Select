@@ -28,7 +28,7 @@ class NodeDataDataSource extends AbstractDataSource {
      * @param array $arguments Additional arguments (key / value)
      * @return array JSON serializable data
      */
-    public function getData(NodeInterface $node = NULL, array $arguments)
+    public function getData(NodeInterface $node = NULL, array $arguments = [])
     {
         /** @var ContentContext $contentContext */
         $contentContext = $this->contentContextFactory->create(array($node));
