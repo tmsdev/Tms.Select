@@ -23,25 +23,25 @@ class NodeDataDataSource extends AbstractDataSource
     protected $assetService;
 
     /**
+     * @var array
+     */
+    protected $labelCache;
+
+    /**
      * Get data
      *
      * @param NodeInterface $node The node that is currently edited (optional)
      * @param array $arguments Additional arguments (key / value)
      * @return array JSON serializable data
      */
-    public function getData(NodeInterface $node = NULL, array $arguments = [])
+    public function getData(NodeInterface $node = null, array $arguments = [])
     {
-        if (isset($arguments['startingPoint']))
-            $rootNode = $node->getContext()->getNode($arguments['startingPoint']);
-        else
-            $rootNode = $node->getContext()->getRootNode();
+        $nodes = [];
 
-        $q = new FlowQuery(array($rootNode));
-        $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
-        $nodes = array();
-
+        if (!$node instanceof NodeInterface)
+            return $nodes;
         if (!isset($arguments['nodeType']) && !isset($arguments['nodeTypes']))
-            return array();
+            return $nodes;
         if (isset($arguments['nodeType']))
             $nodeTypes = array($arguments['nodeType']);
         if (isset($arguments['nodeTypes']))
@@ -50,15 +50,25 @@ class NodeDataDataSource extends AbstractDataSource
         $setLabelPrefixByNodeContext = false;
         if (isset($arguments['setLabelPrefixByNodeContext']) && $arguments['setLabelPrefixByNodeContext'] == true)
             $setLabelPrefixByNodeContext = true;
+
         $labelPropertyName = null;
         if (isset($arguments['labelPropertyName']))
             $labelPropertyName = $arguments['labelPropertyName'];
+
         $previewPropertyName = null;
         if (isset($arguments['previewPropertyName']))
             $previewPropertyName = $arguments['previewPropertyName'];
 
+        if (isset($arguments['startingPoint'])) {
+            $rootNode = $node->getContext()->getNode($arguments['startingPoint']);
+        } else {
+            $rootNode = $node->getContext()->getRootNode();
+        }
         if (isset($arguments['groupBy'])) {
-            foreach ($q->find('[instanceof ' . $arguments['groupBy'] . ']')->get() as $parentNode) {
+            $q = new FlowQuery(array($rootNode));
+            $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
+            $parentNodes = $q->find('[instanceof ' . $arguments['groupBy'] . ']')->get();
+            foreach ($parentNodes as $parentNode) {
                 $nodes = array_merge($nodes, $this->getNodes($parentNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext, $arguments['groupBy']));
             }
         } else {
@@ -80,9 +90,9 @@ class NodeDataDataSource extends AbstractDataSource
      */
     protected function getNodes(NodeInterface $parentNode, $nodeTypes, $labelPropertyName = null, $previewPropertyName = null, $setLabelPrefixByNodeContext = false, $groupBy = null)
     {
+        $nodes = [];
         $q = new FlowQuery(array($parentNode));
         $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
-        $nodes = array();
 
         $filter = [];
         foreach ($nodeTypes as $nodeType)
@@ -130,6 +140,10 @@ class NodeDataDataSource extends AbstractDataSource
      */
     protected function getLabelPrefixByNodeContext(NodeInterface $node, string $label)
     {
+        $nodeHash = md5($node);
+        if (isset($this->labelCache[$nodeHash]))
+            return $this->labelCache[$nodeHash];
+
         if ($node->isHidden())
             $label = '[HIDDEN] ' . $label;
         if ($node->isRemoved())
@@ -142,6 +156,7 @@ class NodeDataDataSource extends AbstractDataSource
         if (!$nodeInLiveWorkspace instanceof NodeInterface)
             $label = '[NOT LIVE] ' . $label;
 
+        $this->labelCache[$nodeHash] = $label;
         return $label;
     }
 }
