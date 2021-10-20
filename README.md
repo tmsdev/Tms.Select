@@ -10,6 +10,7 @@ composer require tms/select
 
 ## Usage
 
+Single-select nodetype configuration:
 ```yaml
 'Your.Package:Type':
   properties:
@@ -28,6 +29,18 @@ composer require tms/select
               labelPropertyName: 'title'
               setLabelPrefixByNodeContext: true
               previewPropertyName: 'thumbnailImage' # works with Neos 7.2+
+```
+
+Multi-select adjustments:
+```yaml
+'Your.Package:Type':
+  properties:
+    yourReferences:
+      type: references
+      ui:
+        inspector:
+          editorOptions:
+            multiple: true # Don't forget to set multiple: true when using type: references
 ```
 
 ### Optional parameters
