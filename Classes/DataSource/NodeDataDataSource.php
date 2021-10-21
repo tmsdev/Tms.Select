@@ -156,13 +156,12 @@ class NodeDataDataSource extends AbstractDataSource
                 $preview = null;
                 if ($previewPropertyName) {
                     $image = $node->getProperty($previewPropertyName);
-                    if (!$image instanceof ImageInterface)
-                        continue;
-                    $thumbnailConfiguration = new ThumbnailConfiguration(null, 74, null, 56);
-                    $thumbnail = $this->assetService->getThumbnailUriAndSizeForAsset($image, $thumbnailConfiguration);
-                    if (!isset($thumbnail['src']))
-                        continue;
-                    $preview = $thumbnail['src'];
+                    if ($image instanceof ImageInterface) {
+                        $thumbnailConfiguration = new ThumbnailConfiguration(null, 74, null, 56);
+                        $thumbnail = $this->assetService->getThumbnailUriAndSizeForAsset($image, $thumbnailConfiguration);
+                        if (isset($thumbnail['src']))
+                            $preview = $thumbnail['src'];
+                    }
                 }
 
                 $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $node->getLabel();
