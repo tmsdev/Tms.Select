@@ -153,6 +153,7 @@ class NodeDataDataSource extends AbstractDataSource
 
         foreach ($q->find($filterString)->get() as $node) {
             if ($node instanceof NodeInterface) {
+                $icon = null;
                 $preview = null;
                 if ($previewPropertyName) {
                     $image = $node->getProperty($previewPropertyName);
@@ -162,6 +163,11 @@ class NodeDataDataSource extends AbstractDataSource
                         if (isset($thumbnail['src']))
                             $preview = $thumbnail['src'];
                     }
+                }
+                if (is_null($preview)) {
+                    $fullNodeConfiguration = $node->getNodeType()->getFullConfiguration();
+                    if (isset($fullNodeConfiguration['ui']['icon']))
+                        $icon = $fullNodeConfiguration['ui']['icon'];
                 }
 
                 $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $node->getLabel();
@@ -176,6 +182,7 @@ class NodeDataDataSource extends AbstractDataSource
                     'value' => $node->getIdentifier(),
                     'label' => $label,
                     'group' => ($groupBy !== null ? $groupLabel : null),
+                    'icon' => $icon,
                     'preview' => $preview
                 );
             }
