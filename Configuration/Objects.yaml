@@ -1,0 +1,19 @@
+Tms\Select\DataSource\NodeDataDataSource:
+  properties:
+    cache:
+      object:
+        factoryObjectName: Neos\Flow\Cache\CacheManager
+        factoryMethodName: getCache
+        arguments:
+          1:
+            value: Tms_Select_DataSourceCache
+
+Tms\Select\NodeSignalHandler:
+  properties:
+    cache:
+      object:
+        factoryObjectName: Neos\Flow\Cache\CacheManager
+        factoryMethodName: getCache
+        arguments:
+          1:
+            value: Tms_Select_DataSourceCache

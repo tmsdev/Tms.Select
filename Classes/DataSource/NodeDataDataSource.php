@@ -1,13 +1,17 @@
 <?php
 namespace Tms\Select\DataSource;
 
+use Neos\Cache\Frontend\VariableFrontend;
 use Neos\Eel\FlowQuery\FlowQuery;
+use Neos\Flow\Log\Utility\LogEnvironment;
 use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Media\Domain\Model\ThumbnailConfiguration;
 use Neos\Media\Domain\Service\AssetService;
 use Neos\Neos\Service\DataSource\AbstractDataSource;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Annotations as Flow;
+use Psr\Log\LoggerInterface;
+use Tms\Select\Service\CachingService;
 
 class NodeDataDataSource extends AbstractDataSource
 {
@@ -18,14 +22,31 @@ class NodeDataDataSource extends AbstractDataSource
 
     /**
      * @Flow\Inject
-     * @var AssetService
+     * @var LoggerInterface
      */
-    protected $assetService;
+    protected $logger;
+
+    /**
+     * @Flow\Inject
+     * @var CachingService
+     */
+    protected $cachingService;
+
+    /**
+     * @var VariableFrontend
+     */
+    protected $cache;
 
     /**
      * @var array
      */
     protected $labelCache;
+
+    /**
+     * @Flow\Inject
+     * @var AssetService
+     */
+    protected $assetService;
 
     /**
      * Get data
@@ -36,17 +57,34 @@ class NodeDataDataSource extends AbstractDataSource
      */
     public function getData(NodeInterface $node = null, array $arguments = [])
     {
-        $nodes = [];
+        $result = [];
 
+        // Validate required parameters and arguments
         if (!$node instanceof NodeInterface)
-            return $nodes;
+            return [];
         if (!isset($arguments['nodeType']) && !isset($arguments['nodeTypes']))
-            return $nodes;
+            return [];
         if (isset($arguments['nodeType']))
             $nodeTypes = array($arguments['nodeType']);
         if (isset($arguments['nodeTypes']))
             $nodeTypes = $arguments['nodeTypes'];
 
+        // Context variables
+        $workspaceName = $node->getContext()->getWorkspaceName();
+        $dimensions = $node->getContext()->getDimensions();
+
+        // Check for an existing cache entry
+        $cacheEntryIdentifier = md5(json_encode([$workspaceName, $dimensions, $arguments]));
+        if ($this->cache->has($cacheEntryIdentifier)) {
+            $this->logger->debug(
+                sprintf('Retrieve cached data source for "%s" on [%s %s] %s', json_encode($arguments), $workspaceName, json_encode($dimensions), $node->getLabel()),
+                LogEnvironment::fromMethodName(__METHOD__)
+            );
+            $result = $this->cache->get($cacheEntryIdentifier);
+            return $result;
+        }
+
+        // Build data source result
         $setLabelPrefixByNodeContext = false;
         if (isset($arguments['setLabelPrefixByNodeContext']) && $arguments['setLabelPrefixByNodeContext'] == true)
             $setLabelPrefixByNodeContext = true;
@@ -64,18 +102,32 @@ class NodeDataDataSource extends AbstractDataSource
         } else {
             $rootNode = $node->getContext()->getRootNode();
         }
+
+        $groupByNodeType = null;
         if (isset($arguments['groupBy'])) {
+            $groupByNodeType = $arguments['groupBy'];
             $q = new FlowQuery(array($rootNode));
             $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
-            $parentNodes = $q->find('[instanceof ' . $arguments['groupBy'] . ']')->get();
+            $parentNodes = $q->find('[instanceof ' . $groupByNodeType . ']')->get();
             foreach ($parentNodes as $parentNode) {
-                $nodes = array_merge($nodes, $this->getNodes($parentNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext, $arguments['groupBy']));
+                $result = array_merge($result, $this->getNodes($parentNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext, $groupByNodeType));
             }
         } else {
-            $nodes = $this->getNodes($rootNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext);
+            $result = $this->getNodes($rootNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext);
         }
 
-        return $nodes;
+        // Whenever a node referenced in the data source changes, the cache entry gets flushed
+        if ($groupByNodeType)
+            array_push($nodeTypes, $groupByNodeType);
+        $cacheEntryTags = $this->cachingService->nodeTypeTag($nodeTypes, $node);
+        $this->cache->set($cacheEntryIdentifier, $result, $cacheEntryTags);
+
+        $this->logger->debug(
+            sprintf('Build new data source for "%s" on [%s %s] %s', json_encode($arguments), $workspaceName, json_encode($dimensions), $node->getLabel()),
+            LogEnvironment::fromMethodName(__METHOD__)
+        );
+
+        return $result;
     }
 
     /**
