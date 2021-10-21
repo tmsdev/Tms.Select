@@ -53,6 +53,14 @@ class NodeSignalHandler
 
     /**
      * @param NodeInterface $node
+     */
+    public function nodeRemoved(NodeInterface $node)
+    {
+        $this->flushDataSourceCaches($node);
+    }
+
+    /**
+     * @param NodeInterface $node
      * @param Workspace|null $node
      */
     public function nodePublished(NodeInterface $node, $targetWorkspace = null)
