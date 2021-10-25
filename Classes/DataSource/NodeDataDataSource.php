@@ -164,10 +164,8 @@ class NodeDataDataSource extends AbstractDataSource
                             $preview = $thumbnail['src'];
                     }
                 }
-                if (is_null($preview)) {
-                    $fullNodeConfiguration = $node->getNodeType()->getFullConfiguration();
-                    if (isset($fullNodeConfiguration['ui']['icon']))
-                        $icon = $fullNodeConfiguration['ui']['icon'];
+                if (is_null($preview) && $node->getNodeType()->hasConfiguration('ui.icon')) {
+                    $icon = $node->getNodeType()->getConfiguration('ui.icon');
                 }
 
                 $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $node->getLabel();

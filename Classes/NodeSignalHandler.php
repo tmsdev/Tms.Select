@@ -34,12 +34,12 @@ class NodeSignalHandler
     protected function flushDataSourceCaches(NodeInterface $node)
     {
         $tag = $this->cachingService->nodeTypeTag($node->getNodeType(), $node);
-        if ($this->cache->getByTag($tag)) {
+        $flushedCacheEntries = $this->cache->flushByTag($tag);
+        if ($flushedCacheEntries) {
             $this->logger->debug(
-                sprintf('Flush data source caches tagged with: "%s"', $tag),
+                sprintf('Flushed %s data source cache(s) tagged with: "%s"', $flushedCacheEntries, $tag),
                 LogEnvironment::fromMethodName(__METHOD__)
             );
-            $this->cache->flushByTag($tag);
         }
     }
 
