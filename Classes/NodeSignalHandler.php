@@ -46,6 +46,14 @@ class NodeSignalHandler
     /**
      * @param NodeInterface $node
      */
+    public function nodeAdded(NodeInterface $node)
+    {
+        $this->flushDataSourceCaches($node);
+    }
+
+    /**
+     * @param NodeInterface $node
+     */
     public function nodeUpdated(NodeInterface $node)
     {
         $this->flushDataSourceCaches($node);

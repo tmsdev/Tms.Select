@@ -11,7 +11,8 @@ use Psr\Log\LoggerInterface;
 /**
  * CachingService provides utility functions for caching
  *
- * - adds node context including content dimensions
+ * - adds node context (workspace + content dimensions)
+ * - skip workspace context when nodetype is "Sitegeist.Taxonomy:Taxonomy"
  * - works with abstract nodetypes (mixins)
  * - sanitize tag names
  *
@@ -64,9 +65,6 @@ class CachingService
      */
     protected function getNodeTypeTagFor($nodeType, $contextNode = null)
     {
-        $workspaceTag = '';
-        $dimensionsTag = '';
-
         $nodeTypeObject = $nodeType;
         if (is_string($nodeType))
             $nodeTypeObject = $this->nodeTypeManager->getNodeType($nodeType);
@@ -95,13 +93,16 @@ class CachingService
         if ($nodeTypeName === '')
             return;
 
-        $nodeTypeName = $this->sanitizeTag($nodeTypeName);
-
+        $workspaceTag = '';
+        $dimensionsTag = '';
         if ($contextNode instanceof NodeInterface) {
-            $workspaceTag = '%' . md5($contextNode->getContext()->getWorkspace()->getName()) .'%_';
+            // Taxonomies only exist in 'live' workspace
+            if ($nodeTypeName !== 'Sitegeist.Taxonomy:Taxonomy')
+                $workspaceTag = '%' . md5($contextNode->getContext()->getWorkspace()->getName()) .'%_';
             $dimensionsTag = '%' . md5(json_encode($contextNode->getContext()->getDimensions())) .'%_';
         }
 
+        $nodeTypeName = $this->sanitizeTag($nodeTypeName);
         $this->tags[] = 'NodeType_' . $workspaceTag . $dimensionsTag . $nodeTypeName;
     }
 

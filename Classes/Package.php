@@ -17,6 +17,7 @@ class Package extends BasePackage
     public function boot(Bootstrap $bootstrap)
     {
         $dispatcher = $bootstrap->getSignalSlotDispatcher();
+        $dispatcher->connect(Node::class, 'nodeAdded', NodeSignalHandler::class, 'nodeAdded');
         $dispatcher->connect(Node::class, 'nodeUpdated', NodeSignalHandler::class, 'nodeUpdated');
         $dispatcher->connect(Node::class, 'nodeRemoved', NodeSignalHandler::class, 'nodeRemoved');
         $dispatcher->connect(PublishingService::class, 'nodePublished', NodeSignalHandler::class, 'nodePublished');
