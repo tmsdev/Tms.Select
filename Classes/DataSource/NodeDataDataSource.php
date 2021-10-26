@@ -106,7 +106,7 @@ class NodeDataDataSource extends AbstractDataSource
         $groupByNodeType = null;
         if (isset($arguments['groupBy'])) {
             $groupByNodeType = $arguments['groupBy'];
-            $q = new FlowQuery(array($rootNode));
+            $q = new FlowQuery([$rootNode]);
             $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
             $parentNodes = $q->find('[instanceof ' . $groupByNodeType . ']')->get();
             foreach ($parentNodes as $parentNode) {
@@ -143,7 +143,7 @@ class NodeDataDataSource extends AbstractDataSource
     protected function getNodes(NodeInterface $parentNode, $nodeTypes, $labelPropertyName = null, $previewPropertyName = null, $setLabelPrefixByNodeContext = false, $groupBy = null)
     {
         $nodes = [];
-        $q = new FlowQuery(array($parentNode));
+        $q = new FlowQuery([$parentNode]);
         $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
 
         $filter = [];
@@ -207,7 +207,7 @@ class NodeDataDataSource extends AbstractDataSource
         if ($node->isHiddenInIndex())
             $label = '[NOT IN MENUS] ' . $label;
 
-        $q = new FlowQuery(array($node));
+        $q = new FlowQuery([$node]);
         $nodeInLiveWorkspace = $q->context(['workspaceName' => 'live'])->get(0);
         if (!$nodeInLiveWorkspace instanceof NodeInterface)
             $label = '[NOT LIVE] ' . $label;
