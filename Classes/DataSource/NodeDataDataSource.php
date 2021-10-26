@@ -108,7 +108,7 @@ class NodeDataDataSource extends AbstractDataSource
             $groupByNodeType = $arguments['groupBy'];
             $q = new FlowQuery([$rootNode]);
             $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
-            $parentNodes = $q->find('[instanceof ' . $groupByNodeType . ']')->get();
+            $parentNodes = $q->find('[instanceof ' . $groupByNodeType . ']')->sortDataSourceRecursiveByIndex()->get();
             foreach ($parentNodes as $parentNode) {
                 $result = array_merge($result, $this->getNodes($parentNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext, $groupByNodeType));
             }
@@ -151,7 +151,7 @@ class NodeDataDataSource extends AbstractDataSource
             $filter[] = '[instanceof ' . $nodeType . ']';
         $filterString = implode(',', $filter);
 
-        foreach ($q->find($filterString)->get() as $node) {
+        foreach ($q->find($filterString)->sortDataSourceRecursiveByIndex()->get() as $node) {
             if ($node instanceof NodeInterface) {
                 $icon = null;
                 $preview = null;
