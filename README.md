@@ -60,5 +60,26 @@ By default, Neos will cache data source results considering the current node. Fo
 We fixed this by implementing a data source cache `Tms_Select_DataSourceCache`.
 To ensure that datasource results are always up to date, you should disable the default data source caching with `dataSourceDisableCaching: true`.
 
+### Works with [Sitegeist.Taxonomy](https://github.com/sitegeist/Sitegeist.Taxonomy)
+
+```yaml
+'Your.Package:Type':
+  properties:
+    yourTaxonomyReferences:
+      type: references
+      ui:
+        inspector:
+          editor: 'Neos.Neos/Inspector/Editors/SelectBoxEditor'
+          editorOptions:
+            allowEmpty: true
+            multiple: true
+            dataSourceIdentifier: 'tms-select-nodedata'
+            dataSourceDisableCaching: true
+            dataSourceAdditionalData:
+              nodeTypes: [ 'Sitegeist.Taxonomy:Taxonomy' ]
+              labelPropertyName: title
+              startingPoint: '/taxonomies/your-vocabulary'
+```
+
 ## Acknowledgments
 Development sponsored by [tms.development - Online Marketing and Neos CMS Agency](https://www.tms-development.de/)
