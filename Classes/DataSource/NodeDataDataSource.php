@@ -169,6 +169,7 @@ class NodeDataDataSource extends AbstractDataSource
                 }
 
                 $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $node->getLabel();
+                $label = $this->sanitiseLabel($label);
                 $groupLabel = $parentNode->getLabel();
 
                 if ($setLabelPrefixByNodeContext) {
@@ -213,6 +214,19 @@ class NodeDataDataSource extends AbstractDataSource
             $label = '[NOT LIVE] ' . $label;
 
         $this->labelCache[$nodeHash] = $label;
+        return $label;
+    }
+
+    /**
+     * @param string $label
+     * @return string
+     */
+    protected function sanitiseLabel(string $label)
+    {
+        $label = str_replace('&nbsp;', ' ', $label);
+        $label = preg_replace('/<br\\W*?\\/?>|\\x{00a0}|[^[:print:]]|\\s+/u', ' ', $label);
+        $label = strip_tags($label);
+        $label = trim($label);
         return $label;
     }
 }
