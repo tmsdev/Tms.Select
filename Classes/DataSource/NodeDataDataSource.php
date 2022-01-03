@@ -72,12 +72,18 @@ class NodeDataDataSource extends AbstractDataSource
         // Context variables
         $workspaceName = $node->getContext()->getWorkspaceName();
         $dimensions = $node->getContext()->getDimensions();
+        if (isset($arguments['startingPoint'])) {
+            $rootNode = $node->getContext()->getNode($arguments['startingPoint']);
+        } else {
+            $rootNode = $node->getContext()->getCurrentSiteNode();
+        }
+        $rootNodePath = $rootNode->getPath();
 
         // Check for an existing cache entry
-        $cacheEntryIdentifier = md5(json_encode([$workspaceName, $dimensions, $arguments]));
+        $cacheEntryIdentifier = md5(json_encode([$workspaceName, $dimensions, $rootNodePath, $arguments]));
         if ($this->cache->has($cacheEntryIdentifier)) {
             $this->logger->debug(
-                sprintf('Retrieve cached data source for "%s" on [%s %s] %s', json_encode($arguments), $workspaceName, json_encode($dimensions), $node->getLabel()),
+                sprintf('Retrieve cached data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNodePath, $node->getLabel()),
                 LogEnvironment::fromMethodName(__METHOD__)
             );
             $result = $this->cache->get($cacheEntryIdentifier);
@@ -96,12 +102,6 @@ class NodeDataDataSource extends AbstractDataSource
         $previewPropertyName = null;
         if (isset($arguments['previewPropertyName']))
             $previewPropertyName = $arguments['previewPropertyName'];
-
-        if (isset($arguments['startingPoint'])) {
-            $rootNode = $node->getContext()->getNode($arguments['startingPoint']);
-        } else {
-            $rootNode = $node->getContext()->getRootNode();
-        }
 
         $groupByNodeType = null;
         if (isset($arguments['groupBy'])) {
@@ -123,7 +123,7 @@ class NodeDataDataSource extends AbstractDataSource
         $this->cache->set($cacheEntryIdentifier, $result, $cacheEntryTags);
 
         $this->logger->debug(
-            sprintf('Build new data source for "%s" on [%s %s] %s', json_encode($arguments), $workspaceName, json_encode($dimensions), $node->getLabel()),
+            sprintf('Build new data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNodePath, $node->getLabel()),
             LogEnvironment::fromMethodName(__METHOD__)
         );
 
