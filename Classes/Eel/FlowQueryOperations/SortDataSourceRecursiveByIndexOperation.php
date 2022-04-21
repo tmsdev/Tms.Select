@@ -36,7 +36,7 @@ class SortDataSourceRecursiveByIndexOperation extends AbstractOperation
      */
     public function canEvaluate($context)
     {
-        return (isset($context[0]) && ($context[0] instanceof NodeInterface));
+        return count($context) === 0 || (is_array($context) === true && (current($context) instanceof NodeInterface));
     }
 
     /**
