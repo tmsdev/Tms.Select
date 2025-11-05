@@ -1,0 +1,7 @@
+Neos:
+  ContentRepositoryRegistry:
+    presets:
+      'default':
+        commandHooks:
+          'Tms.Select:FlushCache':
+            factoryObjectName: Tms\Select\CommandHook\FlushCacheHookFactory

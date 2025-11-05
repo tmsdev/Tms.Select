@@ -1,9 +1,7 @@
 <?php
+
 namespace Tms\Select\Service;
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Model\NodeType;
-use Neos\ContentRepository\Domain\Service\NodeTypeManager;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Log\Utility\LogEnvironment;
 use Psr\Log\LoggerInterface;
@@ -27,21 +25,17 @@ class CachingService
     protected $logger;
 
     /**
-     * @Flow\Inject
-     * @var NodeTypeManager
-     */
-    protected $nodeTypeManager;
-
-    /**
      * @var array
      */
     protected $tags = [];
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
     /**
      * Get valid cache tags for the given nodetype(s)
      *
-     * @param string|NodeType|string[]|NodeType[] $nodeType
-     * @param NodeInterface|null $contextNode If set, cache tags include the workspace and dimensions
+     * @param string|\Neos\ContentRepository\Core\NodeType\NodeType|string[]|\Neos\ContentRepository\Core\NodeType\NodeType[] $nodeType
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node|null $contextNode If set, cache tags include the workspace and dimensions
      * @return string|string[]
      */
     public function nodeTypeTag($nodeType, $contextNode = null)
@@ -59,47 +53,54 @@ class CachingService
     }
 
     /**
-     * @param string|NodeType $nodeType
-     * @param NodeInterface|null $contextNode
+     * @param string|\Neos\ContentRepository\Core\NodeType\NodeType $nodeType
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node|null $contextNode
      * @return string|void
      */
     protected function getNodeTypeTagFor($nodeType, $contextNode = null)
     {
         $nodeTypeObject = $nodeType;
-        if (is_string($nodeType))
-            $nodeTypeObject = $this->nodeTypeManager->getNodeType($nodeType);
-        if (!$nodeTypeObject instanceof NodeType)
+        if (is_string($nodeType)) {
+            // TODO 9.0 migration: Make this code aware of multiple Content Repositories.
+            $contentRepository = $this->contentRepositoryRegistry->get(\Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId::fromString('default'));
+            $nodeTypeObject = $contentRepository->getNodeTypeManager()->getNodeType($nodeType);
+        }
+        if (!$nodeTypeObject instanceof \Neos\ContentRepository\Core\NodeType\NodeType)
             return;
 
         if ($nodeTypeObject->isAbstract()) {
             $nonAbstractNodeTypes = [];
-            foreach ($this->nodeTypeManager->getNodeTypes() as $nonAbstractNodeType) {
+            // TODO 9.0 migration: Make this code aware of multiple Content Repositories.
+            $contentRepository = $this->contentRepositoryRegistry->get(\Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId::fromString('default'));
+            foreach ($contentRepository->getNodeTypeManager()->getNodeTypes() as $nonAbstractNodeType) {
                 if (
-                    isset($nonAbstractNodeType->getConfiguration('superTypes')[$nodeTypeObject->getName()]) &&
-                    $nonAbstractNodeType->getConfiguration('superTypes')[$nodeTypeObject->getName()]
+                    isset($nonAbstractNodeType->getConfiguration('superTypes')[$nodeTypeObject->name->value]) &&
+                    $nonAbstractNodeType->getConfiguration('superTypes')[$nodeTypeObject->name->value]
                 ) {
-                    $nonAbstractNodeTypes[] = $nonAbstractNodeType->getName();
+                    $nonAbstractNodeTypes[] = $nonAbstractNodeType->name->value;
                     $this->getNodeTypeTagFor($nonAbstractNodeType, $contextNode);
                 }
             }
             $this->logger->debug(
-                sprintf('Abstract NodeType "%s" gets tagged with: %s', $nodeTypeObject->getName(), json_encode($nonAbstractNodeTypes)),
+                sprintf('Abstract NodeType "%s" gets tagged with: %s', $nodeTypeObject->name->value, json_encode($nonAbstractNodeTypes)),
                 LogEnvironment::fromMethodName(__METHOD__)
             );
             return;
         }
 
-        $nodeTypeName = $nodeTypeObject->getName();
+        $nodeTypeName = $nodeTypeObject->name->value;
         if ($nodeTypeName === '')
             return;
 
         $workspaceTag = '';
         $dimensionsTag = '';
-        if ($contextNode instanceof NodeInterface) {
+        if ($contextNode instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
             // Taxonomies only exist in 'live' workspace
-            if ($nodeTypeName !== 'Sitegeist.Taxonomy:Taxonomy')
-                $workspaceTag = '%' . md5($contextNode->getContext()->getWorkspace()->getName()) .'%_';
-            $dimensionsTag = '%' . md5(json_encode($contextNode->getContext()->getDimensions())) .'%_';
+            if ($nodeTypeName !== 'Sitegeist.Taxonomy:Taxonomy') {
+                $contentRepository = $this->contentRepositoryRegistry->get($contextNode->contentRepositoryId);
+                $workspaceTag = '%' . md5($contentRepository->findWorkspaceByName($contextNode->workspaceName)->workspaceName->value) . '%_';
+            }
+            $dimensionsTag = '%' . md5($contextNode->dimensionSpacePoint->toJson()) . '%_';
         }
 
         $nodeTypeName = $this->sanitizeTag($nodeTypeName);

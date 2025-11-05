@@ -1,15 +1,17 @@
 <?php
+
 namespace Tms\Select\DataSource;
 
 use Neos\Cache\Frontend\VariableFrontend;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindAncestorNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\Flow\Log\Utility\LogEnvironment;
-use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Media\Domain\Model\ThumbnailConfiguration;
 use Neos\Media\Domain\Service\AssetService;
 use Neos\Neos\Service\DataSource\AbstractDataSource;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Annotations as Flow;
+use Neos\Media\Domain\Model\AssetInterface;
 use Psr\Log\LoggerInterface;
 use Tms\Select\Service\CachingService;
 
@@ -47,20 +49,24 @@ class NodeDataDataSource extends AbstractDataSource
      * @var AssetService
      */
     protected $assetService;
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\Neos\Domain\NodeLabel\NodeLabelGeneratorInterface $nodeLabelGenerator;
 
     /**
      * Get data
      *
-     * @param NodeInterface $node The node that is currently edited (optional)
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node The node that is currently edited (optional)
      * @param array $arguments Additional arguments (key / value)
      * @return array JSON serializable data
      */
-    public function getData(NodeInterface $node = null, array $arguments = [])
+    public function getData(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node = null, array $arguments = [])
     {
         $result = [];
 
         // Validate required parameters and arguments
-        if (!$node instanceof NodeInterface)
+        if (!$node instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node)
             return [];
         if (!isset($arguments['nodeType']) && !isset($arguments['nodeTypes']))
             return [];
@@ -70,20 +76,32 @@ class NodeDataDataSource extends AbstractDataSource
             $nodeTypes = $arguments['nodeTypes'];
 
         // Context variables
-        $workspaceName = $node->getContext()->getWorkspaceName();
-        $dimensions = $node->getContext()->getDimensions();
+        $workspaceName = $node->workspaceName;
+        $dimensions = $node->dimensionSpacePoint->toLegacyDimensionArray();
+        $subgraph = $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
+
         if (isset($arguments['startingPoint'])) {
-            $rootNode = $node->getContext()->getNode($arguments['startingPoint']);
+            $rootNode = $subgraph->findNodeByPath($arguments['startingPoint'], $node->aggregateId);
+
+            if ($rootNode === null) {
+                throw new \RuntimeException(sprintf('No node found at path \"%s\".', $arguments['startingPoint']), 1710752111);
+            }
         } else {
-            $rootNode = $node->getContext()->getCurrentSiteNode();
+            $filter = FindAncestorNodesFilter::create(
+                NodeTypeCriteria::fromFilterString('Neos.Neos:Site')
+            );
+            $rootNode = $subgraph->findAncestorNodes($node->aggregateId, $filter)->first();
+
+            if ($rootNode === null) {
+                throw new \RuntimeException('Could not determine site node from current node upward.', 1710752142);
+            }
         }
-        $rootNodePath = $rootNode->getPath();
 
         // Check for an existing cache entry
-        $cacheEntryIdentifier = md5(json_encode([$workspaceName, $dimensions, $rootNodePath, $arguments]));
+        $cacheEntryIdentifier = md5(json_encode([$workspaceName, $dimensions, $arguments]));
         if ($this->cache->has($cacheEntryIdentifier)) {
             $this->logger->debug(
-                sprintf('Retrieve cached data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNodePath, $node->getLabel()),
+                sprintf('Retrieve cached data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNode->name->value, $this->nodeLabelGenerator->getLabel($node)),
                 LogEnvironment::fromMethodName(__METHOD__)
             );
             $result = $this->cache->get($cacheEntryIdentifier);
@@ -107,7 +125,7 @@ class NodeDataDataSource extends AbstractDataSource
         if (isset($arguments['groupBy'])) {
             $groupByNodeType = $arguments['groupBy'];
             $q = new FlowQuery([$rootNode]);
-            $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
+            $q = $q->context(['invisibleContentShown' => true]);
             $parentNodes = $q->find('[instanceof ' . $groupByNodeType . ']')->sortDataSourceRecursiveByIndex()->get();
             foreach ($parentNodes as $parentNode) {
                 $result = array_merge($result, $this->getNodes($parentNode, $nodeTypes, $labelPropertyName, $previewPropertyName, $setLabelPrefixByNodeContext, $groupByNodeType));
@@ -119,11 +137,14 @@ class NodeDataDataSource extends AbstractDataSource
         // Whenever a node referenced in the data source changes, the cache entry gets flushed
         if ($groupByNodeType)
             array_push($nodeTypes, $groupByNodeType);
+
         $cacheEntryTags = $this->cachingService->nodeTypeTag($nodeTypes, $node);
+        $cacheEntryTags[] = 'Node_' . $rootNode->aggregateId->value;
+
         $this->cache->set($cacheEntryIdentifier, $result, $cacheEntryTags);
 
         $this->logger->debug(
-            sprintf('Build new data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNodePath, $node->getLabel()),
+            sprintf('Build new data source for "%s" in [Workspace: %s] [Dimensions: %s] [Root: %s] [Label: %s]', json_encode($arguments), $workspaceName, json_encode($dimensions), $rootNode->name->value, $this->nodeLabelGenerator->getLabel($node)),
             LogEnvironment::fromMethodName(__METHOD__)
         );
 
@@ -131,7 +152,7 @@ class NodeDataDataSource extends AbstractDataSource
     }
 
     /**
-     * @param NodeInterface $parentNode
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $parentNode
      * @param array $nodeTypes
      * @param string|null $labelPropertyName
      * @param string|null $previewPropertyName
@@ -140,11 +161,11 @@ class NodeDataDataSource extends AbstractDataSource
      *
      * @return array
      */
-    protected function getNodes(NodeInterface $parentNode, $nodeTypes, $labelPropertyName = null, $previewPropertyName = null, $setLabelPrefixByNodeContext = false, $groupBy = null)
+    protected function getNodes(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $parentNode, $nodeTypes, $labelPropertyName = null, $previewPropertyName = null, $setLabelPrefixByNodeContext = false, $groupBy = null)
     {
         $nodes = [];
         $q = new FlowQuery([$parentNode]);
-        $q = $q->context(['invisibleContentShown' => true, 'removedContentShown' => true, 'inaccessibleContentShown' => true]);
+        $q = $q->context(['invisibleContentShown' => true]);
 
         $filter = [];
         foreach ($nodeTypes as $nodeType)
@@ -152,25 +173,27 @@ class NodeDataDataSource extends AbstractDataSource
         $filterString = implode(',', $filter);
 
         foreach ($q->find($filterString)->sortDataSourceRecursiveByIndex()->get() as $node) {
-            if ($node instanceof NodeInterface) {
+            if ($node instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
                 $icon = null;
                 $preview = null;
                 if ($previewPropertyName) {
                     $image = $node->getProperty($previewPropertyName);
-                    if ($image instanceof ImageInterface) {
+                    if ($image instanceof AssetInterface) {
                         $thumbnailConfiguration = new ThumbnailConfiguration(null, 74, null, 56);
                         $thumbnail = $this->assetService->getThumbnailUriAndSizeForAsset($image, $thumbnailConfiguration);
                         if (isset($thumbnail['src']))
                             $preview = $thumbnail['src'];
                     }
                 }
-                if (is_null($preview) && $node->getNodeType()->hasConfiguration('ui.icon')) {
-                    $icon = $node->getNodeType()->getConfiguration('ui.icon');
+                $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+
+                if (is_null($preview) && $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->hasConfiguration('ui.icon')) {
+                    $icon = $contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->getConfiguration('ui.icon');
                 }
 
-                $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $node->getLabel();
+                $label = $labelPropertyName ? $node->getProperty($labelPropertyName) : $this->nodeLabelGenerator->getLabel($node);
                 $label = $this->sanitiseLabel($label);
-                $groupLabel = $parentNode->getLabel();
+                $groupLabel = $this->nodeLabelGenerator->getLabel($parentNode);
 
                 if ($setLabelPrefixByNodeContext) {
                     $label = $this->getLabelPrefixByNodeContext($node, $label);
@@ -178,7 +201,7 @@ class NodeDataDataSource extends AbstractDataSource
                 }
 
                 $nodes[] = array(
-                    'value' => $node->getIdentifier(),
+                    'value' => $node->aggregateId->value,
                     'label' => $label,
                     'group' => ($groupBy !== null ? $groupLabel : null),
                     'icon' => $icon,
@@ -190,27 +213,26 @@ class NodeDataDataSource extends AbstractDataSource
     }
 
     /**
-     * @param NodeInterface $node
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
      * @param string $label
      *
      * @return string
      */
-    protected function getLabelPrefixByNodeContext(NodeInterface $node, string $label)
+    protected function getLabelPrefixByNodeContext(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node, string $label)
     {
-        $nodeHash = md5($node);
+        $nodeHash = md5((string)$node);
         if (isset($this->labelCache[$nodeHash]))
             return $this->labelCache[$nodeHash];
 
-        if ($node->isHidden())
+        if ($node->tags->contain(\Neos\Neos\Domain\SubtreeTagging\NeosSubtreeTag::disabled()))
             $label = '[HIDDEN] ' . $label;
-        if ($node->isRemoved())
-            $label = '[REMOVED] ' . $label;
-        if ($node->isHiddenInIndex())
+
+        if ($node->getProperty('hiddenInMenu'))
             $label = '[NOT IN MENUS] ' . $label;
 
         $q = new FlowQuery([$node]);
         $nodeInLiveWorkspace = $q->context(['workspaceName' => 'live'])->get(0);
-        if (!$nodeInLiveWorkspace instanceof NodeInterface)
+        if (!$nodeInLiveWorkspace instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node)
             $label = '[NOT LIVE] ' . $label;
 
         $this->labelCache[$nodeHash] = $label;
