@@ -61,7 +61,7 @@ class NodeDataDataSource extends AbstractDataSource
      * @param array $arguments Additional arguments (key / value)
      * @return array JSON serializable data
      */
-    public function getData(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node = null, array $arguments = [])
+    public function getData(?\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node = null, array $arguments = [])
     {
         $result = [];
 
